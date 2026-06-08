@@ -1,11 +1,14 @@
 import requests
+import tweepy
 import os
 import sys
 from datetime import datetime, timezone, timedelta
 
-WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
+X_API_KEY = os.environ.get("X_API_KEY", "")
+X_API_SECRET = os.environ.get("X_API_SECRET", "")
+X_ACCESS_TOKEN = os.environ.get("X_ACCESS_TOKEN", "")
+X_ACCESS_TOKEN_SECRET = os.environ.get("X_ACCESS_TOKEN_SECRET", "")
 JST = timezone(timedelta(hours=9))
-
 
 def get_weather_icon_and_text(code):
     if code == 0:
@@ -29,7 +32,6 @@ def get_weather_icon_and_text(code):
     else:
         return "🌤️", "天気変わりやすい"
 
-
 def get_wave_status(height):
     if height <= 0.5:
         return "穏やか🙌"
@@ -41,7 +43,6 @@ def get_wave_status(height):
         return "波あり・要注意"
     else:
         return "高波・要注意⚠️"
-
 
 def get_comment(weather_code, wave_height, countdown):
     if countdown <= 0:
@@ -59,10 +60,8 @@ def get_comment(weather_code, wave_height, countdown):
     else:
         return "久米島の海が、皆さんのお越しをお待ちしています🌊"
 
-
 def get_weekday_ja(weekday):
     return ["月", "火", "水", "木", "金", "土", "日"][weekday]
-
 
 def fetch_data():
     weather_url = (
@@ -80,11 +79,9 @@ def fetch_data():
     marine_data = requests.get(marine_url, timeout=10).json()
     return weather_data, marine_data
 
-
 def build_tweet(now, weather_data, marine_data):
     reopen_date = datetime(2026, 7, 1, tzinfo=JST)
     countdown = (reopen_date.date() - now.date()).days
-
     current = weather_data["current"]
     temp = round(current["temperature_2m"])
     feels_like = round(current["apparent_temperature"])
@@ -92,15 +89,12 @@ def build_tweet(now, weather_data, marine_data):
     wind = round(current["wind_speed_10m"])
     weather_code = current["weather_code"]
     wave_height = round(marine_data["current"]["wave_height"], 1)
-
     icon, weather_text = get_weather_icon_and_text(weather_code)
     wave_status = get_wave_status(wave_height)
     comment = get_comment(weather_code, wave_height, countdown)
-
     month = now.month
     day = now.day
     weekday = get_weekday_ja(now.weekday())
-
     if countdown > 0:
         tweet = (
             f"【久米島 本日の海況】{month}月{day}日({weekday})\n"
@@ -125,38 +119,29 @@ def build_tweet(now, weather_data, marine_data):
         )
     return tweet
 
-
-def post_to_discord(tweet):
-    message = (
-        "📋 **本日のX投稿テキスト**\n"
-        "コピーして @kumejimaocean へ投稿してください👇\n\n"
-        f"```\n{tweet}\n```"
+def post_to_x(tweet):
+    client = tweepy.Client(
+        consumer_key=X_API_KEY,
+        consumer_secret=X_API_SECRET,
+        access_token=X_ACCESS_TOKEN,
+        access_token_secret=X_ACCESS_TOKEN_SECRET
     )
-    resp = requests.post(WEBHOOK_URL, json={"content": message}, timeout=10)
-    return resp.status_code
-
+    response = client.create_tweet(text=tweet)
+    return response
 
 def main():
-    if not WEBHOOK_URL:
-        print("ERROR: DISCORD_WEBHOOK_URL が設定されていません")
+    if not all([X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET]):
+        print("ERROR: X API の認証情報が設定されていません")
         sys.exit(1)
-
     now = datetime.now(JST)
     print(f"実行時刻: {now.strftime('%Y-%m-%d %H:%M JST')}")
-
     weather_data, marine_data = fetch_data()
     tweet = build_tweet(now, weather_data, marine_data)
-
     print("生成されたツイート:")
     print(tweet)
-
-    status = post_to_discord(tweet)
-    if status == 204:
-        print("✅ Discordへの投稿成功")
-    else:
-        print(f"❌ Discord投稿エラー: status={status}")
-        sys.exit(1)
-
+    print(f"文字数: {len(tweet)}")
+    response = post_to_x(tweet)
+    print(f"✅ Xへの投稿成功！ Tweet ID: {response.data['id']}")
 
 if __name__ == "__main__":
     main()
