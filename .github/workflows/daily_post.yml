@@ -1,26 +1,24 @@
-name: 久米島 毎朝X投稿テキスト生成
-
+name: 久米島 毎朝X自動投稿
 on:
   schedule:
     - cron: '0 23 * * *'
   workflow_dispatch:
-
 jobs:
   post-weather:
     runs-on: ubuntu-latest
     steps:
       - name: リポジトリをチェックアウト
         uses: actions/checkout@v4
-
       - name: Python セットアップ
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: 依存パッケージをインストール
-        run: pip install requests
-
-      - name: 天気取得 → Discord投稿
+        run: pip install requests tweepy
+      - name: 天気取得 → X投稿
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
         run: python weather_post.py
